@@ -87,8 +87,8 @@ int main(int argc, char *argv[])
                 break;
             }
             print_time(); 
-            // print received message from server
-            printf("Received: %.*s\n", n, buf);
+            // print received message from server from other connections
+            printf("%.*s", n, buf);
         }
        
         if(FD_ISSET(STDIN_FILENO, &set)) {
