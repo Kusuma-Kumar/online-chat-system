@@ -16,12 +16,7 @@ chat client
 
 #define BUF_SIZE 4096
 
-void print_time() {
-    time_t curr_time = time(NULL);
-    struct tm *tm_info = localtime(&curr_time);
-    // get the time
-    printf("%02d:%02d:%02d: ", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
-}
+void print_time();
 
 int main(int argc, char *argv[])
 {
@@ -98,10 +93,6 @@ int main(int argc, char *argv[])
                 printf("Exiting.\n");
                 break;
             }
-            // check if the message is a nickname change
-            if(strncmp(buf, "/nick", 6) == 0) {
-                printf("Nickname change command sent.\n");
-            }
             // send user input to server
             send(conn_fd, buf, n, 0);
         }
@@ -110,3 +101,9 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+void print_time() {
+    time_t curr_time = time(NULL);
+    struct tm *tm_info = localtime(&curr_time);
+    // get the time
+    printf("%02d:%02d:%02d: ", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+}
