@@ -13,10 +13,14 @@ chat client
 #include <string.h>
 #include <time.h>
 #include <sys/select.h>
+#include <pthread.h>
+#include <strings.h>
 
 #define BUF_SIZE 4096
+static int conn_fd = 0;
 
-void print_time();
+void *send_to_server();
+void *receive_from_server();
 
 int main(int argc, char *argv[])
 {
@@ -30,13 +34,13 @@ int main(int argc, char *argv[])
     dest_port     = argv[2];
 
     struct addrinfo hints, *res;
-    int conn_fd;
-    int n;
     int rc;
-    char buf[BUF_SIZE];
 
     // create a socket 
-    conn_fd = socket(PF_INET, SOCK_STREAM, 0);
+    if((conn_fd = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("socket");
+        exit(1);
+    }
 
     // find the IP address of the server
     memset(&hints, 0, sizeof(hints));
@@ -50,60 +54,77 @@ int main(int argc, char *argv[])
     // connect to the server 
     if(connect(conn_fd, res->ai_addr, res->ai_addrlen) < 0) {
         perror("connect");
-        exit(2);
+        exit(1);
     }
 
     printf("Connected\n");
 
-    // infinite loop for reading and recieving data
-    // might have to change this since instruction says
-    // When a client sends a message, every client connected to the server should receive it and print it out,
-    // with proper attribution.
-    while(1) {
-        fd_set set;
-        FD_ZERO(&set);
-        // add server connection fd to set
-        FD_SET(conn_fd, &set);
-        // add stdrd input input fd to set
-        FD_SET(STDIN_FILENO, &set);
-
-        // check if any fds ready to read 
-        if(select(conn_fd + 1, &set, NULL, NULL, NULL) < 0) {
-            perror("select");
-            break;
-        }
-
-        // check if any fds ready to read, recieve data
-        if(FD_ISSET(conn_fd, &set)) {
-            n = recv(conn_fd, buf, BUF_SIZE, 0);
-            // if recv returns 0 or neg number the server closed the connection
-            if(n <= 0) {
-                printf("Connection closed by remote host.\n");
-                break;
-            }
-            print_time(); 
-            // print received message from server from other connections
-            printf("%.*s", n, buf);
-        }
-       
-        if(FD_ISSET(STDIN_FILENO, &set)) {
-            // read user input from terminal
-            n = read(STDIN_FILENO, buf, BUF_SIZE);
-            if(n <= 0) {
-                printf("Exiting.\n");
-                break;
-            }
-            // send user input to server
-            send(conn_fd, buf, n, 0);
-        }
+    // Send message and communicate with the server through thread
+    pthread_t send_thread;
+    if(pthread_create(&send_thread, NULL, *send_to_server, NULL) != 0) {
+        perror("pthread_create");
+        exit(1);
     }
+
+    // similarly receive message and communicate with the server through thread
+    pthread_t recv_thread;
+    if(pthread_create(&recv_thread, NULL, *receive_from_server, NULL) != 0) {
+        perror("pthread_create");
+        exit(1);
+    }
+
+    // Waiting for both threads
+    pthread_join(send_thread, NULL);
+    pthread_join(recv_thread, NULL);
+    
     close(conn_fd);
     return 0;
 }
 
-void print_time() {
-    time_t curr_time = time(NULL);
-    struct tm *tm_info = localtime(&curr_time);
-    // get the time
-    printf("%02d:%02d:%02d: ", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+void *send_to_server() {
+    int bytes_read;
+    char buf [BUF_SIZE + 1];
+
+    while(1) {
+        if((bytes_read = read(STDIN_FILENO, buf, BUF_SIZE)) < 0) {
+            perror("read");
+            exit(1);
+        }
+
+        // Client exits with Ctrl-D
+        if(bytes_read == 0) {
+            printf("Exiting. \n");
+            close(conn_fd);
+            exit(1);
+        }
+        
+        // send the inputted data to server
+        buf [bytes_read] = '\0';
+        send(conn_fd, buf, bytes_read + 1, 0) ;
+    }
+
+    return NULL;
+}
+
+void *receive_from_server() {
+    int bytes_received;
+    char buf[BUF_SIZE + 1];
+    
+    while(1) {
+        if((bytes_received = recv(conn_fd, buf, BUF_SIZE, 0)) < 0) {
+            perror("recv");
+            exit(1);
+        }
+        // Server exits with Ctrl-C
+        if(bytes_received == 0) {
+            printf("Connection closed by remote host. In");
+            close(conn_fd);
+            exit(1);
+        }
+
+        buf [bytes_received] = '\0';
+        printf("%s", buf) ;
+        fsync(STDOUT_FILENO);
+    }
+    return NULL;
 }
