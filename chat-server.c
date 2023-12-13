@@ -24,6 +24,7 @@ chat server
 static struct Client *head = NULL;
 static pthread_mutex_t list_mutex;
 
+
 struct Client {
     int conn_fd;
     char *name;
@@ -39,6 +40,7 @@ void broadcast_message(char *message, size_t message_length);
 void *create_client(int conn_fd, char *ip, uint16_t port);
 void *delete_client(struct Client *client);
 void close_handler(int sig);
+
 
 int main(int argc, char *argv[]) {
     char *listen_port, *remote_ip;
@@ -137,12 +139,14 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+
 void *handle_client(void *arg) {
     struct Client *client = (struct Client *) arg;
-    char buf[BUF_SIZE], server_message[BUF_SIZE], client_message[BUF_SIZE];
+    char buf[BUF_SIZE], server_message[BUF_SIZE]; //client_message[BUF_SIZE]
     int bytes_received;
     char *format;
     int message_length = 0;
+    char* get_curr_time();
 
     while((bytes_received = recv(client->conn_fd, buf, BUF_SIZE, 0)) > 0) {
         // Check if the user message wants to change their nickname 
@@ -176,7 +180,7 @@ void *handle_client(void *arg) {
             fsync(STDOUT_FILENO); 
             
             if (client->name == NULL) {
-                message_length = snprintf(server_message, BUF_SIZE, "unknown: %s",buf);
+                message_length = snprintf(server_message, BUF_SIZE, "unknown: %s", buf);
             } else {
                 message_length = snprintf(server_message, BUF_SIZE, "%s: %s", client->name, buf);
             }
@@ -186,13 +190,20 @@ void *handle_client(void *arg) {
         }
     }
 
-    // Rec failed
-    if(bytes_received < 0) {
-        perror("recv");
-        return NULL;
-    }
+    // if client disconnects normally 
+    if(bytes_received == 0) {
+        char *time_stamp = get_curr_time();
+        message_length = snprintf(server_message, BUF_SIZE, "%s: User %s (%s:%d) has disconnected.\n", time_stamp, client->name ? client->name : "Unknown", client->ip, client->port);
 
-    printf("Lost connection from %s\n", client->name);
+        // boradcast disconnection to all other clients
+        broadcast_message(server_message, message_length);
+        printf("Lost connection from %s\n", client->name ? client->name : "Unknown");
+
+    }
+    // Rec failed
+    else if (bytes_received < 0) {
+        perror("recv");
+    }
 
     pthread_mutex_lock(&list_mutex);
     delete_client(client);
@@ -201,6 +212,7 @@ void *handle_client(void *arg) {
     return NULL;
 }
 
+
 void print_time() {
     time_t curr_time = time(NULL);
     struct tm *tm_info = localtime(&curr_time);
@@ -208,19 +220,36 @@ void print_time() {
     printf("%02d:%02d:%02d: ", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
 }
 
+
+char* get_curr_time() {
+    static char buffer[30];
+    time_t curr_time = time(NULL);
+    struct tm *tm_info = localtime(&curr_time);
+
+    // format 
+    strftime(buffer, sizeof(buffer), "%H:%M:%S", tm_info);
+    return buffer;
+}
+
 // Broadcast all other messages to all clients
 void broadcast_message(char *message, size_t message_length) {
     pthread_mutex_lock(&list_mutex);
     struct Client *current_client = head;
+
+    //M added 
+    char time_stamp_message[BUF_SIZE];
+    char *time_stamp = get_curr_time();
+    snprintf(time_stamp_message, BUF_SIZE, "%s %s", time_stamp, message);
     
     while(current_client != NULL) {
-        if (send(current_client->conn_fd, message, message_length, 0) < 0) {
+        if (send(current_client->conn_fd, time_stamp_message, strlen(time_stamp_message), 0) < 0) {
             perror("send");
         }
         current_client = current_client->next;
     }
     pthread_mutex_unlock(&list_mutex);
 }
+
 
 void *create_client(int conn_fd, char *ip, uint16_t port) {
     struct Client *new_client;
@@ -256,6 +285,7 @@ void *create_client(int conn_fd, char *ip, uint16_t port) {
     return new_client;
 }
 
+
 void *delete_client(struct Client *client) {
     close(client->conn_fd);
     
@@ -279,13 +309,26 @@ void *delete_client(struct Client *client) {
     return NULL;
 }
 
+
 // Closes all connections to the server and frees all clients
 void close_handler(int sig) {
+    pthread_mutex_lock(&list_mutex);
     struct Client *curr_client = head;
-    
+    struct Client *next_client;
+
     while(curr_client != NULL) {
+        // save next client before freeing the current
+        next_client = curr_client->next; 
+
+        // close client conection 
         close(curr_client->conn_fd);
-        curr_client = curr_client->next;
+        free(curr_client->name);
         free(curr_client);
+        // move on to the next client 
+        curr_client = next_client;
     }
+    head = NULL;
+    pthread_mutex_unlock(&list_mutex);
+    pthread_mutex_destroy(&list_mutex);
+    exit(0);
 }

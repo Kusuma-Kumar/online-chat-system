@@ -81,9 +81,10 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+
 void *send_to_server() {
     int bytes_read;
-    char buf [BUF_SIZE + 1];
+    char buf[BUF_SIZE + 1];
 
     while(1) {
         if((bytes_read = read(STDIN_FILENO, buf, BUF_SIZE)) < 0) {
@@ -99,12 +100,13 @@ void *send_to_server() {
         }
         
         // send the inputted data to server
-        buf [bytes_read] = '\0';
+        buf[bytes_read] = '\0';
         send(conn_fd, buf, bytes_read + 1, 0) ;
     }
 
     return NULL;
 }
+
 
 void *receive_from_server() {
     int bytes_received;
@@ -117,12 +119,12 @@ void *receive_from_server() {
         }
         // Server exits with Ctrl-C
         if(bytes_received == 0) {
-            printf("Connection closed by remote host. In");
+            printf("Connection closed by remote host.\n");
             close(conn_fd);
             exit(1);
         }
 
-        buf [bytes_received] = '\0';
+        buf[bytes_received] = '\0';
         printf("%s", buf) ;
         fsync(STDOUT_FILENO);
     }
