@@ -176,7 +176,7 @@ void *handle_client(void *arg) {
             fsync(STDOUT_FILENO); 
             
             if (client->name == NULL) {
-                message_length = snprintf(server_message, BUF_SIZE, "unknown %s", buf);
+                message_length = snprintf(server_message, BUF_SIZE, "unknown: %s",buf);
             } else {
                 message_length = snprintf(server_message, BUF_SIZE, "%s: %s", client->name, buf);
             }
@@ -184,11 +184,6 @@ void *handle_client(void *arg) {
             // Broadcast the nickname change to all clients
             broadcast_message(server_message, message_length);
         }
-        
-        // Prefix the time to the client_message
-        // char *time_str = get_time();
-        // char prefixed_message[BUF_SIZE];
-        // snprintf(prefixed_message, BUF_SIZE, "%s %s", time_str, client_message);
     }
 
     // Rec failed
