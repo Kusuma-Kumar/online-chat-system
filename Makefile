@@ -3,7 +3,7 @@ CFLAGS=-g -Wall -pedantic -pthread
 .PHONY: all
 all: chat-server chat-client
 
-echo-server: chat-server.c
+chat-server: chat-server.c
 	gcc $(CFLAGS) -o $@ $^
 
 chat-client: chat-client.c
