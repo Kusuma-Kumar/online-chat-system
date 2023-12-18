@@ -192,9 +192,8 @@ void *handle_client(void *arg) {
 
                         // should close client connection and clean up
                         close(client->conn_fd);
-                        pthread_mutex_lock(&list_mutex);
                         delete_client(client);
-                        pthread_mutex_unlock(&list_mutex);
+                   
                         return NULL;
                     }
 
@@ -283,6 +282,7 @@ void broadcast_message(char *message, size_t message_length) {
 
 
 void *create_client(int conn_fd, char *ip, uint16_t port) {
+    pthread_mutex_lock(&list_mutex);
     struct Client *new_client;
     struct Client *curr_client;
 
@@ -313,11 +313,13 @@ void *create_client(int conn_fd, char *ip, uint16_t port) {
         new_client->prev = curr_client;
     }
 
+    pthread_mutex_unlock(&list_mutex);
     return new_client;
 }
 
 
 void *delete_client(struct Client *client) {
+    pthread_mutex_lock(&list_mutex);
     close(client->conn_fd);
     
     if(head == NULL) {
@@ -337,6 +339,7 @@ void *delete_client(struct Client *client) {
     }
 
     free(client);
+    pthread_mutex_unlock(&list_mutex);
     return NULL;
 }
 
