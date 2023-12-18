@@ -122,24 +122,17 @@ int main(int argc, char *argv[]) {
         
         // Create new Client and its thread.
         pthread_t thread_id;
-        struct Client* new_client;
-        
-        pthread_mutex_lock(&list_mutex);
-        if((new_client = create_client(conn_fd, remote_ip, remote_port)) == NULL) {
+        struct Client* new_client = create_client(conn_fd, remote_ip, remote_port);
+     
+        if(new_client == NULL) {
             printf("Failed to create new client.\n");
             close(conn_fd);
-            // unlock mutex if creation fails
-            pthread_mutex_unlock(&list_mutex);
         
         } else {
-            // unlock after adding client to list
-            pthread_mutex_unlock(&list_mutex);
 
             if(pthread_create(&thread_id, NULL, &handle_client, (void *) new_client) != 0) {
                 perror("pthread_create");
                 delete_client(new_client);
-                // should lock again if we delete the client
-                pthread_mutex_lock(&list_mutex);
             }
         }
         // detach the thread to handle the client 
@@ -173,9 +166,7 @@ void *handle_client(void *arg) {
 
             //cleanup 
             close(client->conn_fd);
-            pthread_mutex_lock(&list_mutex);
             delete_client(client);
-            pthread_mutex_unlock(&list_mutex);
             return NULL;
         }
 
@@ -220,23 +211,22 @@ void *handle_client(void *arg) {
                     // Broadcast the nickname change to all clients
                     broadcast_message(server_message, message_length);
                 }
+            } else {
+                // regular chat message 
+                if(client->name == NULL) {
+                    message_length = snprintf(server_message, MAX_MESSAGE_LEN, "unknown: %s", message);
                 } else {
-                    // regular chat message 
-                    if(client->name == NULL) {
-                        message_length = snprintf(server_message, MAX_MESSAGE_LEN, "unknown: %s", message);
-                    } else {
-                        message_length = snprintf(server_message, MAX_MESSAGE_LEN, "%s: %s", client->name, message);
-                    }
-
-                    // broadcast nickname change to all clients
-                    broadcast_message(server_message, message_length);
+                    message_length = snprintf(server_message, MAX_MESSAGE_LEN, "%s: %s", client->name, message);
                 }
-                // reset the buf for next message 
-                buf_message_len = 0;
-                message[0] = '\0';
-            }
-    }
 
+                // broadcast nickname change to all client
+                broadcast_message(server_message, message_length);
+            }
+            buf_message_len = 0;
+            message[0] = '\0';
+        }
+    }
+            
     // handle disconnections and revc error
     if(bytes_received == 0) {
         message_length = snprintf(server_message, BUF_SIZE, "User %s (%s:%d) has disconnected.\n", client->name ? client->name : "Unknown", client->ip, client->port);
@@ -247,10 +237,8 @@ void *handle_client(void *arg) {
     } else if(bytes_received < 0) {
         perror("recv");
     }
-    // cleanup
-    pthread_mutex_lock(&list_mutex);
+    //cleanup 
     delete_client(client);
-    pthread_mutex_unlock(&list_mutex);
 
     return NULL;
 }
@@ -301,7 +289,6 @@ void *create_client(int conn_fd, char *ip, uint16_t port) {
     // Allocate memory for Client struct and initialize
     if((new_client = (struct Client *) malloc(sizeof(struct Client))) == NULL) {
         perror("malloc");
-        pthread_mutex_unlock(&list_mutex);
         return NULL;
     }
 
@@ -326,7 +313,6 @@ void *create_client(int conn_fd, char *ip, uint16_t port) {
         new_client->prev = curr_client;
     }
 
-    pthread_mutex_unlock(&list_mutex);
     return new_client;
 }
 
@@ -357,7 +343,6 @@ void *delete_client(struct Client *client) {
 
 // Closes all connections to the server and frees all clients
 void close_handler(int sig) {
-    pthread_mutex_lock(&list_mutex);
     struct Client *curr_client = head;
     struct Client *next_client;
 
@@ -373,7 +358,6 @@ void close_handler(int sig) {
         curr_client = next_client;
     }
     head = NULL;
-    pthread_mutex_unlock(&list_mutex);
     pthread_mutex_destroy(&list_mutex);
     exit(0);
 }

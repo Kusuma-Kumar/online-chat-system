@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
 void *send_to_server() {
     int bytes_read;
     char buf[BUF_SIZE + 1];
+    ssize_t bytes_sent;
 
     while(1) {
         if((bytes_read = read(STDIN_FILENO, buf, BUF_SIZE)) < 0) {
@@ -101,7 +102,14 @@ void *send_to_server() {
         
         // send the inputted data to server
         buf[bytes_read] = '\0';
-        send(conn_fd, buf, bytes_read + 1, 0) ;
+        bytes_sent = send(conn_fd, buf, bytes_read + 1, 0) ;
+
+        // check that send is successful
+        if(bytes_sent < 0) {
+            perror("send");
+            close(conn_fd);
+            exit(1);
+        }
     }
 
     return NULL;
@@ -111,7 +119,7 @@ void *send_to_server() {
 void *receive_from_server() {
     int bytes_received;
     char buf[BUF_SIZE + 1];
-    
+
     while(1) {
         if((bytes_received = recv(conn_fd, buf, BUF_SIZE, 0)) < 0) {
             perror("recv");
