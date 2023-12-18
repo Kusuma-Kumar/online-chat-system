@@ -135,8 +135,6 @@ int main(int argc, char *argv[]) {
                 delete_client(new_client);
             }
         }
-        // detach the thread to handle the client 
-        pthread_mutex_unlock(&list_mutex);
     }
     
     // Close socket and destroy its mutex
@@ -302,7 +300,6 @@ void *create_client(int conn_fd, char *ip, uint16_t port) {
     if(head == NULL) {
         new_client->prev = NULL;
         head = new_client;
-        return new_client;
     } else {
         // if client list not empty append client to end 
         curr_client = head;
